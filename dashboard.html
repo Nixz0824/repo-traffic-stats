@@ -5,202 +5,210 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>仓库流量看板</title>
 <style>
-  :root{--bg:#0d1117;--panel:#161b22;--panel2:#1f2733;--bd:#30363d;--tx:#e6edf3;--mut:#8b949e;--acc:#58a6ff;--ok:#3fb950;--warn:#d29922;}
+  :root{
+    --bg:#0b0e14; --panel:#12161f; --panel2:#171c27; --panelline:#212836;
+    --line:#1f2733; --txt:#e7edf5; --mut:#8b94a3; --dim:#5c6673;
+    --acc:#4c9aff; --accsoft:rgba(76,154,255,.14); --ok:#3fb950; --warn:#d29922;
+  }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 -apple-system,'Segoe UI','Microsoft YaHei',sans-serif;padding:20px}
-  h1{font-size:20px;margin:0 0 4px}
-  .sub{color:var(--mut);font-size:12px;margin-bottom:18px}
-  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px}
-  .card{background:var(--panel);border:1px solid var(--bd);border-radius:10px;padding:14px}
-  .card .k{color:var(--mut);font-size:12px}
-  .card .v{font-size:24px;font-weight:700;margin-top:4px}
-  .card .s{color:var(--mut);font-size:12px;margin-top:2px}
-  .panel{background:var(--panel);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:18px}
-  .panel h2{font-size:15px;margin:0 0 12px;color:var(--tx)}
-  .ctrl{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end;margin-bottom:8px}
-  .grp{display:flex;flex-direction:column;gap:6px}
-  .grp label{font-size:12px;color:var(--mut)}
-  .seg{display:inline-flex;background:var(--panel2);border:1px solid var(--bd);border-radius:8px;overflow:hidden}
-  .seg button{background:transparent;border:0;color:var(--mut);padding:6px 12px;font-size:13px;cursor:pointer}
-  .seg button.on{background:var(--acc);color:#0d1117;font-weight:600}
-  select, .select{background:var(--panel2);border:1px solid var(--bd);color:var(--tx);padding:7px 10px;border-radius:8px;font-size:13px}
+  html,body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 -apple-system,'Segoe UI','Microsoft YaHei',sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:var(--acc);text-decoration:none}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 24px 60px}
+  .top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:22px}
+  h1{font-size:22px;font-weight:700;letter-spacing:.2px;margin:0}
+  .h1sub{color:var(--mut);font-size:12.5px;margin-top:4px}
+  .meta{text-align:right;color:var(--mut);font-size:12px}
+  .meta b{color:var(--txt);font-weight:600}
+
+  .filters{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;
+    background:linear-gradient(var(--bg) 78%,transparent);padding:10px 0 14px;margin-bottom:14px;backdrop-filter:blur(2px)}
+  .f{display:flex;flex-direction:column;gap:6px}
+  .f>.k{font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:var(--dim)}
+  .seg{display:inline-flex;background:var(--panel2);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg button{background:transparent;border:0;color:var(--mut);padding:7px 14px;font-size:12.5px;cursor:pointer;transition:.12s}
+  .seg button:hover{color:var(--txt)}
+  .seg button.on{background:var(--acc);color:#0a0e16;font-weight:600}
+  select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:7px 12px;border-radius:9px;font-size:12.5px}
+
+  .cards{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px}
+  .card{background:var(--panel);border:1px solid var(--panelline);border-radius:12px;padding:14px 15px}
+  .card .k{color:var(--mut);font-size:11.5px;letter-spacing:.3px}
+  .card .v{font-size:23px;font-weight:700;margin-top:5px;letter-spacing:-.4px;font-variant-numeric:tabular-nums}
+  .card .s{color:var(--dim);font-size:11.5px;margin-top:3px}
+
+  .grid{display:grid;grid-template-columns:1.65fr 1fr;gap:16px;margin-bottom:16px}
+  .panel{background:var(--panel);border:1px solid var(--panelline);border-radius:12px;padding:18px 18px 12px}
+  .panel h2{font-size:13px;font-weight:600;color:var(--mut);letter-spacing:.3px;margin:0 0 4px;text-transform:uppercase}
+  .panel .h2cap{font-size:12px;color:var(--dim);margin-bottom:10px}
   svg{display:block;width:100%;overflow:visible}
-  .legend{color:var(--mut);font-size:12px;margin-top:6px}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th,td{padding:7px 10px;border-bottom:1px solid var(--bd);text-align:right;white-space:nowrap}
-  th{color:var(--mut);font-weight:600;cursor:pointer;user-select:none}
-  th:first-child,td:first-child{text-align:left}
-  th:hover{color:var(--tx)}
-  .empty{color:var(--mut);padding:24px;text-align:center}
-  .axis{stroke:var(--bd);stroke-width:1}
-  .grid{stroke:#21262d;stroke-width:1}
-  .val{fill:var(--mut);font-size:11px}
-  .lbl{fill:var(--mut);font-size:11px;text-anchor:end}
-  .note{color:var(--mut);font-size:12px;margin-top:12px}
-  .dot{fill:var(--acc)}
+  .gridline{stroke:#1b222d;stroke-width:1}
+  .axisline{stroke:#2a3342;stroke-width:1}
+  .xt{fill:var(--dim);font-size:10.5px}
+  .yt{fill:var(--dim);font-size:10.5px}
+  .area{fill:url(#ga)}
+  .line{fill:none;stroke:var(--acc);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+  .dot{fill:var(--acc);cursor:pointer}
   .bar{fill:var(--acc);rx:3}
-  .ranktext{fill:var(--tx);font-size:12px}
+  .ranklabel{fill:var(--mut);font-size:11.5px}
+  .rankval{fill:var(--txt);font-size:11.5px;font-weight:600}
+
+  .empty{color:var(--mut);padding:28px;text-align:center;font-size:13px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  th{color:var(--dim);font-weight:600;cursor:pointer;user-select:none;font-size:11.5px;text-transform:uppercase;letter-spacing:.3px}
+  th:first-child,td:first-child{text-align:left}
+  th:hover{color:var(--txt)}
+  tbody tr:hover{background:var(--panel2)}
+  .foot{color:var(--dim);font-size:12px;margin-top:14px;line-height:1.7}
+
+  @media(max-width:960px){.cards{grid-template-columns:repeat(3,1fr)}.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<h1>仓库流量看板</h1>
-<div class="sub" id="subtitle"></div>
-
-<div class="cards" id="cards"></div>
-
-<div class="panel">
-  <h2>筛选</h2>
-  <div class="ctrl">
-    <div class="grp"><label>类别(指标)</label>
-      <div class="seg" id="segMetric"></div></div>
-    <div class="grp"><label>粒度</label>
-      <div class="seg" id="segGran"></div></div>
-    <div class="grp"><label>仓库范围</label>
-      <select id="scope"></select></div>
-    <div class="grp"><label>时间范围</label>
-      <select id="range"></select></div>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>仓库流量看板</h1>
+      <div class="h1sub">Views · Unique · Clones · Cloners</div>
+    </div>
+    <div class="meta">数据源 <b>all-traffic.csv</b> · 每仓库每天一行<br>看板每日由 GitHub Actions 自动生成</div>
   </div>
-</div>
 
-<div class="panel">
-  <h2>趋势图</h2>
-  <div id="trend"></div>
-  <div class="legend" id="trendLegend"></div>
-</div>
+  <div class="filters">
+    <div class="f"><span class="k">类别</span><div class="seg" id="segMetric"></div></div>
+    <div class="f"><span class="k">粒度</span><div class="seg" id="segGran"></div></div>
+    <div class="f"><span class="k">仓库</span><select id="scope"></select></div>
+    <div class="f"><span class="k">时间范围</span><select id="range"></select></div>
+  </div>
 
-<div class="panel" id="rankWrap">
-  <h2>仓库排名</h2>
-  <div id="rank"></div>
-</div>
+  <div class="cards" id="cards"></div>
 
-<div class="panel">
-  <h2>明细表</h2>
-  <div id="table"></div>
-  <div class="note">提示:点表头排序。数据来自 GitHub Traffic API,每天定时抓取并取历史最大值。</div>
+  <div class="grid">
+    <div class="panel">
+      <h2>趋势</h2><div class="h2cap" id="trendCap"></div>
+      <div id="trend"></div>
+    </div>
+    <div class="panel">
+      <h2>仓库排名</h2><div class="h2cap" id="rankCap"></div>
+      <div id="rank"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>明细</h2><div class="h2cap">点表头排序</div>
+    <div id="table"></div>
+  </div>
+
+  <div class="foot" id="foot"></div>
 </div>
 
 <script>
 const DATA = [{"repo": "Nixz0824/AiDocks", "date": "2026-08-23", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/AiDocks", "date": "2026-08-24", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/AiDocks", "date": "2026-08-25", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/AiDocks", "date": "2026-08-26", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/AiDocks", "date": "2026-08-27", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/AiDocks", "date": "2026-08-28", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/AiDocks", "date": "2026-08-29", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/AiDocks", "date": "2026-08-30", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/AiDocks", "date": "2026-08-31", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/AiDocks", "date": "2026-09-01", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/AiDocks", "date": "2026-09-02", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/AiDocks", "date": "2026-09-03", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/AiDocks", "date": "2026-09-04", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/AiDocks", "date": "2026-09-05", "views": 12, "uniques": 2, "clones": 18, "cloners": 8}, {"repo": "Nixz0824/MOYUhub", "date": "2026-08-23", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/MOYUhub", "date": "2026-08-24", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/MOYUhub", "date": "2026-08-25", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/MOYUhub", "date": "2026-08-26", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/MOYUhub", "date": "2026-08-27", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/MOYUhub", "date": "2026-08-28", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/MOYUhub", "date": "2026-08-29", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/MOYUhub", "date": "2026-08-30", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/MOYUhub", "date": "2026-08-31", "views": 0, "uniques": 0, "clones": 2, "cloners": 2}, {"repo": "Nixz0824/MOYUhub", "date": "2026-09-01", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/MOYUhub", "date": "2026-09-02", "views": 0, "uniques": 0, "clones": 3, "cloners": 3}, {"repo": "Nixz0824/MOYUhub", "date": "2026-09-03", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/MOYUhub", "date": "2026-09-04", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/MOYUhub", "date": "2026-09-05", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/PierceView", "date": "2026-08-25", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/PierceView", "date": "2026-08-26", "views": 3, "uniques": 1, "clones": 2, "cloners": 2}, {"repo": "Nixz0824/PierceView", "date": "2026-08-27", "views": 3, "uniques": 1, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/PierceView", "date": "2026-08-28", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/PierceView", "date": "2026-08-29", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/PierceView", "date": "2026-08-30", "views": 0, "uniques": 0, "clones": 2, "cloners": 2}, {"repo": "Nixz0824/PierceView", "date": "2026-08-31", "views": 0, "uniques": 0, "clones": 2, "cloners": 2}, {"repo": "Nixz0824/PierceView", "date": "2026-09-01", "views": 0, "uniques": 0, "clones": 4, "cloners": 3}, {"repo": "Nixz0824/PierceView", "date": "2026-09-02", "views": 0, "uniques": 0, "clones": 2, "cloners": 2}, {"repo": "Nixz0824/PierceView", "date": "2026-09-03", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/PierceView", "date": "2026-09-04", "views": 4, "uniques": 2, "clones": 2, "cloners": 2}, {"repo": "Nixz0824/PierceView", "date": "2026-09-05", "views": 3, "uniques": 1, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/PierceView", "date": "2026-09-06", "views": 0, "uniques": 0, "clones": 2, "cloners": 2}, {"repo": "Nixz0824/PierceView", "date": "2026-09-07", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/RiftLens-LoL-Korean-Translator-Purely-Visual", "date": "2026-08-23", "views": 1, "uniques": 1, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/RiftLens-LoL-Korean-Translator-Purely-Visual", "date": "2026-08-24", "views": 4, "uniques": 1, "clones": 6, "cloners": 6}, {"repo": "Nixz0824/RiftLens-LoL-Korean-Translator-Purely-Visual", "date": "2026-08-25", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/RiftLens-LoL-Korean-Translator-Purely-Visual", "date": "2026-08-26", "views": 1, "uniques": 1, "clones": 4, "cloners": 4}, {"repo": "Nixz0824/RiftLens-LoL-Korean-Translator-Purely-Visual", "date": "2026-08-27", "views": 4, "uniques": 2, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/RiftLens-LoL-Korean-Translator-Purely-Visual", "date": "2026-08-28", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/RiftLens-LoL-Korean-Translator-Purely-Visual", "date": "2026-08-29", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/RiftLens-LoL-Korean-Translator-Purely-Visual", "date": "2026-08-30", "views": 1, "uniques": 1, "clones": 2, "cloners": 2}, {"repo": "Nixz0824/RiftLens-LoL-Korean-Translator-Purely-Visual", "date": "2026-08-31", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/RiftLens-LoL-Korean-Translator-Purely-Visual", "date": "2026-09-01", "views": 0, "uniques": 0, "clones": 2, "cloners": 1}, {"repo": "Nixz0824/RiftLens-LoL-Korean-Translator-Purely-Visual", "date": "2026-09-02", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/RiftLens-LoL-Korean-Translator-Purely-Visual", "date": "2026-09-03", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/RiftLens-LoL-Korean-Translator-Purely-Visual", "date": "2026-09-04", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/RiftLens-LoL-Korean-Translator-Purely-Visual", "date": "2026-09-05", "views": 3, "uniques": 1, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/ai-agent-learning-map", "date": "2026-08-23", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/ai-agent-learning-map", "date": "2026-08-24", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/ai-agent-learning-map", "date": "2026-08-25", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/ai-agent-learning-map", "date": "2026-08-26", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/ai-agent-learning-map", "date": "2026-08-27", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/ai-agent-learning-map", "date": "2026-08-28", "views": 1, "uniques": 1, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/ai-agent-learning-map", "date": "2026-08-29", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/ai-agent-learning-map", "date": "2026-08-30", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/ai-agent-learning-map", "date": "2026-08-31", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/ai-agent-learning-map", "date": "2026-09-01", "views": 3, "uniques": 2, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/ai-agent-learning-map", "date": "2026-09-02", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/ai-agent-learning-map", "date": "2026-09-03", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/ai-agent-learning-map", "date": "2026-09-04", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/ai-agent-learning-map", "date": "2026-09-05", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/awesome-dsh-plugin", "date": "2026-08-23", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/awesome-dsh-plugin", "date": "2026-08-24", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/awesome-dsh-plugin", "date": "2026-08-25", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/awesome-dsh-plugin", "date": "2026-08-26", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/awesome-dsh-plugin", "date": "2026-08-27", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/awesome-dsh-plugin", "date": "2026-08-28", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/awesome-dsh-plugin", "date": "2026-08-29", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/awesome-dsh-plugin", "date": "2026-08-30", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/awesome-dsh-plugin", "date": "2026-08-31", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/awesome-dsh-plugin", "date": "2026-09-01", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/awesome-dsh-plugin", "date": "2026-09-02", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/awesome-dsh-plugin", "date": "2026-09-03", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/awesome-dsh-plugin", "date": "2026-09-04", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/awesome-dsh-plugin", "date": "2026-09-05", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/dsh-composer-alcove", "date": "2026-08-25", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/dsh-composer-alcove", "date": "2026-08-26", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/dsh-composer-alcove", "date": "2026-08-27", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/dsh-composer-alcove", "date": "2026-08-28", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/dsh-composer-alcove", "date": "2026-08-29", "views": 0, "uniques": 0, "clones": 11, "cloners": 6}, {"repo": "Nixz0824/dsh-composer-alcove", "date": "2026-08-30", "views": 0, "uniques": 0, "clones": 3, "cloners": 3}, {"repo": "Nixz0824/dsh-composer-alcove", "date": "2026-08-31", "views": 0, "uniques": 0, "clones": 4, "cloners": 4}, {"repo": "Nixz0824/dsh-composer-alcove", "date": "2026-09-01", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/dsh-composer-alcove", "date": "2026-09-02", "views": 1, "uniques": 1, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/dsh-composer-alcove", "date": "2026-09-03", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/dsh-composer-alcove", "date": "2026-09-04", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/dsh-composer-alcove", "date": "2026-09-05", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/dsh-composer-alcove", "date": "2026-09-06", "views": 4, "uniques": 1, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/dsh-composer-alcove", "date": "2026-09-07", "views": 0, "uniques": 0, "clones": 2, "cloners": 2}, {"repo": "Nixz0824/dsh-sound-cue", "date": "2026-08-23", "views": 2, "uniques": 2, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/dsh-sound-cue", "date": "2026-08-24", "views": 5, "uniques": 3, "clones": 4, "cloners": 3}, {"repo": "Nixz0824/dsh-sound-cue", "date": "2026-08-25", "views": 2, "uniques": 1, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/dsh-sound-cue", "date": "2026-08-26", "views": 4, "uniques": 2, "clones": 2, "cloners": 2}, {"repo": "Nixz0824/dsh-sound-cue", "date": "2026-08-27", "views": 3, "uniques": 1, "clones": 2, "cloners": 1}, {"repo": "Nixz0824/dsh-sound-cue", "date": "2026-08-28", "views": 0, "uniques": 0, "clones": 3, "cloners": 2}, {"repo": "Nixz0824/dsh-sound-cue", "date": "2026-08-29", "views": 1, "uniques": 1, "clones": 2, "cloners": 2}, {"repo": "Nixz0824/dsh-sound-cue", "date": "2026-08-30", "views": 4, "uniques": 1, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/dsh-sound-cue", "date": "2026-08-31", "views": 2, "uniques": 2, "clones": 3, "cloners": 3}, {"repo": "Nixz0824/dsh-sound-cue", "date": "2026-09-01", "views": 2, "uniques": 2, "clones": 2, "cloners": 1}, {"repo": "Nixz0824/dsh-sound-cue", "date": "2026-09-02", "views": 1, "uniques": 1, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/dsh-sound-cue", "date": "2026-09-03", "views": 10, "uniques": 2, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/dsh-sound-cue", "date": "2026-09-04", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/dsh-sound-cue", "date": "2026-09-05", "views": 11, "uniques": 2, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/dsh-usage-stats-plus", "date": "2026-08-23", "views": 8, "uniques": 7, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/dsh-usage-stats-plus", "date": "2026-08-24", "views": 17, "uniques": 11, "clones": 6, "cloners": 4}, {"repo": "Nixz0824/dsh-usage-stats-plus", "date": "2026-08-25", "views": 3, "uniques": 3, "clones": 4, "cloners": 3}, {"repo": "Nixz0824/dsh-usage-stats-plus", "date": "2026-08-26", "views": 6, "uniques": 6, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/dsh-usage-stats-plus", "date": "2026-08-27", "views": 9, "uniques": 6, "clones": 3, "cloners": 2}, {"repo": "Nixz0824/dsh-usage-stats-plus", "date": "2026-08-28", "views": 5, "uniques": 5, "clones": 4, "cloners": 3}, {"repo": "Nixz0824/dsh-usage-stats-plus", "date": "2026-08-29", "views": 3, "uniques": 3, "clones": 3, "cloners": 3}, {"repo": "Nixz0824/dsh-usage-stats-plus", "date": "2026-08-30", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/dsh-usage-stats-plus", "date": "2026-08-31", "views": 5, "uniques": 5, "clones": 3, "cloners": 3}, {"repo": "Nixz0824/dsh-usage-stats-plus", "date": "2026-09-01", "views": 10, "uniques": 6, "clones": 2, "cloners": 1}, {"repo": "Nixz0824/dsh-usage-stats-plus", "date": "2026-09-02", "views": 1, "uniques": 1, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/dsh-usage-stats-plus", "date": "2026-09-03", "views": 2, "uniques": 2, "clones": 2, "cloners": 2}, {"repo": "Nixz0824/dsh-usage-stats-plus", "date": "2026-09-04", "views": 1, "uniques": 1, "clones": 2, "cloners": 2}, {"repo": "Nixz0824/dsh-usage-stats-plus", "date": "2026-09-05", "views": 2, "uniques": 2, "clones": 2, "cloners": 1}, {"repo": "Nixz0824/jinitaimei-camera-school", "date": "2026-08-23", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/jinitaimei-camera-school", "date": "2026-08-24", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/jinitaimei-camera-school", "date": "2026-08-25", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/jinitaimei-camera-school", "date": "2026-08-26", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/jinitaimei-camera-school", "date": "2026-08-27", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/jinitaimei-camera-school", "date": "2026-08-28", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/jinitaimei-camera-school", "date": "2026-08-29", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/jinitaimei-camera-school", "date": "2026-08-30", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/jinitaimei-camera-school", "date": "2026-08-31", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/jinitaimei-camera-school", "date": "2026-09-01", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/jinitaimei-camera-school", "date": "2026-09-02", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/jinitaimei-camera-school", "date": "2026-09-03", "views": 1, "uniques": 1, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/jinitaimei-camera-school", "date": "2026-09-04", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/jinitaimei-camera-school", "date": "2026-09-05", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/repo-traffic-stats", "date": "2026-08-26", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/repo-traffic-stats", "date": "2026-08-27", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/repo-traffic-stats", "date": "2026-08-28", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/repo-traffic-stats", "date": "2026-08-29", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/repo-traffic-stats", "date": "2026-08-30", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/repo-traffic-stats", "date": "2026-08-31", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/repo-traffic-stats", "date": "2026-09-01", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/repo-traffic-stats", "date": "2026-09-02", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/repo-traffic-stats", "date": "2026-09-03", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/repo-traffic-stats", "date": "2026-09-04", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/repo-traffic-stats", "date": "2026-09-05", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/repo-traffic-stats", "date": "2026-09-06", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/repo-traffic-stats", "date": "2026-09-07", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/repo-traffic-stats", "date": "2026-09-08", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/zx-ai-gallery", "date": "2026-08-25", "views": 0, "uniques": 0, "clones": 2, "cloners": 2}, {"repo": "Nixz0824/zx-ai-gallery", "date": "2026-08-26", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/zx-ai-gallery", "date": "2026-08-27", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/zx-ai-gallery", "date": "2026-08-28", "views": 1, "uniques": 1, "clones": 15, "cloners": 5}, {"repo": "Nixz0824/zx-ai-gallery", "date": "2026-08-29", "views": 1, "uniques": 1, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/zx-ai-gallery", "date": "2026-08-30", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/zx-ai-gallery", "date": "2026-08-31", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/zx-ai-gallery", "date": "2026-09-01", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/zx-ai-gallery", "date": "2026-09-02", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/zx-ai-gallery", "date": "2026-09-03", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/zx-ai-gallery", "date": "2026-09-04", "views": 0, "uniques": 0, "clones": 1, "cloners": 1}, {"repo": "Nixz0824/zx-ai-gallery", "date": "2026-09-05", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/zx-ai-gallery", "date": "2026-09-06", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}, {"repo": "Nixz0824/zx-ai-gallery", "date": "2026-09-07", "views": 0, "uniques": 0, "clones": 0, "cloners": 0}];
 const METRICS = {views:'浏览', uniques:'访客', clones:'克隆', cloners:'克隆者'};
-const MKEY = {views:'views', uniques:'uniques', clones:'clones', cloners:'cloners'};
-let S = {metric:'views', gran:'day', scope:'all', range:7};
+const MK = {views:'views', uniques:'uniques', clones:'clones', cloners:'cloners'};
+let S = {metric:'views', gran:'day', scope:'all', range:14};
 
+const ACC='#4c9aff', ACCSOFT='rgba(76,154,255,.13)';
+function el(id){return document.getElementById(id);}
 function pad(n){return (n<10?'0':'')+n;}
 function iso(y,m,d){return y+'-'+pad(m)+'-'+pad(d);}
-function todayISO(){const t=new Date();return iso(t.getFullYear(),t.getMonth()+1,t.getDate());}
-function mondayISO(dstr){const p=dstr.split('-');const d=new Date(+p[0],+p[1]-1,+p[2]);const wd=(d.getDay()+6)%7;d.setDate(d.getDate()-wd);return iso(d.getFullYear(),d.getMonth()+1,d.getDate());}
-function key(date,gran){if(gran==='day')return date;if(gran==='week')return mondayISO(date);return date.slice(0,7);}
-function cutoff(){if(S.range===0)return '0000-00-00';const t=new Date();t.setDate(t.getDate()-(S.range-1));return iso(t.getFullYear(),t.getMonth()+1,t.getDate());}
-
+function addDays(dstr,n){const p=dstr.split('-');const d=new Date(+p[0],+p[1]-1,+p[2]);d.setDate(d.getDate()+n);return iso(d.getFullYear(),d.getMonth()+1,d.getDate());}
+function maxDate(){if(!DATA.length)return '0000-00-00';return DATA.reduce((m,r)=>r.date>m?r.date:m,DATA[0].date);}
+function monday(dstr){const p=dstr.split('-');const d=new Date(+p[0],+p[1]-1,+p[2]);const wd=(d.getDay()+6)%7;d.setDate(d.getDate()-wd);return iso(d.getFullYear(),d.getMonth()+1,d.getDate());}
+function key(date,g){return g==='day'?date:g==='week'?monday(date):date.slice(0,7);}
+function cutoff(){if(S.range===0)return '0000-00-00';return addDays(maxDate(),-(S.range-1));}
 function fmtMetric(k){return METRICS[k]||k;}
-function fillChart(el,inner){el.innerHTML=inner;}
 
-function sum(arr,m){return arr.reduce((a,r)=>a+(+r[MKEY[m]]||0),0);}
-
-function filterRows(){
-  const cut=cutoff();
-  return DATA.filter(function(r){ if(S.scope!=='all'&&r.repo!==S.scope)return false; return r.date>=cut; });
-}
-
-function aggregateSeries(rows){
-  const m=S.metric,c={};
-  rows.forEach(function(r){const k=key(r.date,S.gran); c[k]=(c[k]||0)+(+r[MKEY[m]]||0);});
-  return Object.keys(c).sort().map(function(k){return {label:k,value:c[k]};});
-}
+function filterRows(){const cut=cutoff();return DATA.filter(r=>(S.scope==='all'||r.repo===S.scope)&&r.date>=cut);}
+function series(rows){const c={};rows.forEach(r=>{const k=key(r.date,S.gran);c[k]=(c[k]||0)+(+r[MK[S.metric]]||0);});return Object.keys(c).sort().map(k=>({label:k,value:c[k]}));}
+function sum(rows,k){return rows.reduce((a,r)=>a+(+r[MK[k]]||0),0);}
 
 function renderCards(rows){
-  const repos=new Set(rows.map(function(r){return r.repo;}));
-  const dates=rows.map(function(r){return r.date;}).sort();
-  const sumV=sum(rows,'views'),sumC=sum(rows,'uniques'),sumCl=sum(rows,'clones');
-  const byRepo={};rows.forEach(function(r){byRepo[r.repo]=(byRepo[r.repo]||0)+(+r[MKEY[S.metric]]||0);});
-  let top='-';let topv=0;Object.keys(byRepo).forEach(function(r){if(byRepo[r]>topv){topv=byRepo[r];top=r;}});
-  const rangeLabel=S.range===0?'全部':('近'+S.range+'天');
+  const repos=new Set(DATA.map(r=>r.repo));const dates=DATA.map(r=>r.date).sort();
+  const by={};rows.forEach(r=>{by[r.repo]=(by[r.repo]||0)+(+r[MK[S.metric]]||0);});
+  let top='-',tv=0;Object.keys(by).forEach(r=>{if(by[r]>tv){tv=by[r];top=r;}});
+  const rl=S.range===0?'全部':'近'+S.range+'天';
   el('cards').innerHTML=
-    card('仓库数',repos.size)+
-    card('日期跨度',dates.length?(dates[0]+' ~ '+dates[dates.length-1]):'-')+
-    card('浏览(合计)',sumV)+
-    card('访客(合计)',sumC)+
-    card('克隆(合计)',sumCl)+
-    card('Top 仓库',top, rangeLabel+' · '+fmtMetric(S.metric));
+    card('仓库数',repos.size,'已纳入统计')+
+    card('日期跨度',dates.length?dates[0].slice(5)+'~'+dates[dates.length-1].slice(5):'-','数据覆盖')+
+    card('浏览合计',sum(rows,'views'),rl)+
+    card('访客合计',sum(rows,'uniques'),rl)+
+    card('克隆合计',sum(rows,'clones'),rl)+
+    card('Top 仓库',top,rl+' · '+fmtMetric(S.metric));
 }
-function card(k,v,s){return '<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="s">'+(s||'')+'</div></div>';}
+function card(k,v,s){return '<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="s">'+s+'</div></div>';}
 
-function renderTrend(series){
-  const el0=el('trend');if(!series.length){el0.innerHTML='<div class="empty">该范围暂无数据</div>';return;}
-  const W=920,H=300,P=40;
-  const max=Math.max.apply(null,series.map(function(s){return s.value;}))||1;
-  const n=series.length;
-  const x=i=>P+i*(W-2*P)/Math.max(n-1,1);
-  const y=v=>H-P-(v/max)*(H-2*P);
-  let grid='';for(let g=0;g<=4;g++){const gy=y(max*g/4);grid+='<line class="grid" x1='+P+' y1='+gy+' x2='+(W-P)+' y2='+gy+'/>';const gv=Math.round(max*g/4);grid+='<text class="val" x='+(P-6)+' y='+(gy+4)+' text-anchor="end">'+gv+'</text>';}
-  let path='',area='',dots='';
-  series.forEach(function(s,i){const px=x(i),py=y(s.value);path+=(i?'L':'M')+px+' '+py+' ';area+=(i?'L':'M')+px+' '+py+' ';dots+='<circle class="dot" cx="'+px+'" cy="'+py+'" r="3"><title>'+s.label+' · '+fmtMetric(S.metric)+' '+s.value+'</title></circle>';});
-  area+='L'+x(n-1)+' '+(H-P)+' L'+P+' '+(H-P)+' Z';
-  let xlab='';const step=Math.max(1,Math.floor(n/6));series.forEach(function(s,i){if(i%step===0){xlab+='<text class="lbl" x='+x(i)+' y='+(H-P+16)+' text-anchor="middle">'+s.label+'</text>';}});
-  let line='';series.forEach(function(s,i){if(i%step===0){line+='<line class="axis" x1='+x(i)+' y1='+P+' x2='+x(i)+' y2='+(H-P)+'/>';}});
-  fillChart(el0,'<svg viewBox="0 0 '+W+' '+H+'">'+grid+line+'<path d="'+area+'" fill="'+halfHex('#58a6ff')+'" />'+
-    '<path d="'+path+'" fill="none" stroke="#58a6ff" stroke-width="2"/>'+dots+
-    '<line class="axis" x1='+P+' y1='+(H-P)+' x2='+(W-P)+' y2='+(H-P)+'/>'+xlab+'</svg>');
-  el('trendLegend').textContent='趋势 = '+fmtMetric(S.metric)+' · 粒度 '+(S.gran==='day'?'日':S.gran==='week'?'周':'月')+' · '+(S.scope==='all'?'全部仓库合计':S.scope);
+function drawTrend(rows){
+  const box=el('trend');const s=series(rows);
+  el('trendCap').textContent=fmtMetric(S.metric)+' · '+(S.gran==='day'?'日':S.gran==='week'?'周':'月')+' · '+(S.scope==='all'?'全部仓库':'指定仓库');
+  if(!s.length){box.innerHTML='<div class="empty">该范围暂无数据</div>';return;}
+  const W=980,H=320,Pt=24,Pb=34,Pl=48,Pr=16;
+  const max=Math.max.apply(null,s.map(x=>x.value))||0;
+  const vmax=max>0?max:1;
+  const x=i=>Pl+i*(W-Pl-Pr)/Math.max(s.length-1,1);
+  const y=v=>H-Pb-(v/vmax)*(H-Pt-Pb);
+  let grid='',yt='';
+  for(let g=0;g<=4;g++){const gy=y(vmax*g/4);grid+='<line class="gridline" x1="'+Pl+'" y1="'+gy+'" x2="'+(W-Pr)+'" y2="'+gy+'"/>';yt+='<text class="yt" x="'+(Pl-8)+'" y="'+(gy+4)+'" text-anchor="end">'+fmtNum(vmax*g/4)+'</text>';}
+  let area='M'+x(0)+' '+y(s[0].value);s.forEach((p,i)=>{area+=' L'+x(i)+' '+y(p.value);});area+=' L'+x(s.length-1)+' '+(H-Pb)+' L'+x(0)+' '+(H-Pb)+' Z';
+  let line='M'+x(0)+' '+y(s[0].value);s.forEach((p,i)=>{line+=' L'+x(i)+' '+y(p.value);});
+  let dots='',xt='';const step=Math.max(1,Math.ceil(s.length/8));
+  s.forEach((p,i)=>{dots+='<circle class="dot" cx="'+x(i)+'" cy="'+y(p.value)+'" r="3"><title>'+p.label+' · '+fmtMetric(S.metric)+' '+(p.value||0)+'</title></circle>';if(i%step===0){xt+='<text class="xt" x="'+x(i)+'" y="'+(H-Pb+18)+'" text-anchor="middle">'+p.label+'</text>';}});
+  box.innerHTML='<svg viewBox="0 0 '+W+' '+H+'">'+
+    '<defs><linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+(ACC)+'" stop-opacity=".22"/><stop offset="1" stop-color="'+ACC+'" stop-opacity="0"/></linearGradient></defs>'+
+    grid+yt+
+    '<path class="area" d="'+area+'"/>'+
+    '<path class="line" d="'+line+'"/>'+dots+
+    '<line class="axisline" x1="'+Pl+'" y1="'+(H-Pb)+'" x2="'+(W-Pr)+'" y2="'+(H-Pb)+'"/>'+xt+'</svg>';
+  if(!max){box.innerHTML+='<div class="empty" style="padding:8px">该范围内均为 0(近期低流量或无数据)</div>';}
 }
-function halfHex(){return 'rgba(88,166,255,0.12)';}
+function fmtNum(n){if(n>=10000)return (n/10000).toFixed(1)+'w';if(n>=1000)return (n/1000).toFixed(1)+'k';return String(n);}
 
-function renderRank(rows){
-  const wrap=el('rankWrap');
-  if(S.scope!=='all'){wrap.style.display='none';return;}
-  wrap.style.display='';
-  const byRepo={};rows.forEach(function(r){byRepo[r.repo]=(byRepo[r.repo]||0)+(+r[MKEY[S.metric]]||0);});
-  const arr=Object.keys(byRepo).map(function(r){return {repo:r,value:byRepo[r]};}).sort(function(a,b){return b.value-a.value;}).slice(0,15);
-  const el0=el('rank');if(!arr.length){el0.innerHTML='<div class="empty">暂无数据</div>';return;}
-  const max=arr[0].value||1,W=920,rowH=22,H=arr.length*rowH+10;
-  let bars='';arr.forEach(function(it,i){const y=6+i*rowH;const bw=Math.max(2,(it.value/max)*(W-260));bars+='<rect class="bar" x="230" y="'+y+'" width="'+bw+'" height="16"/>'+
-    '<text class="ranktext" x="222" y="'+(y+13)+'" text-anchor="end">'+it.repo+'</text>'+
-    '<text class="ranktext" x="'+(236+bw)+'" y="'+(y+13)+'">'+it.value+'</text>';});
-  fillChart(el0,'<svg viewBox="0 0 '+W+' '+H+'">'+bars+'</svg>');
+function drawRank(rows){
+  const box=el('rank');
+  el('rankCap').textContent=fmtMetric(S.metric)+' · 按'+fmtMetric(S.metric)+'排序 · Top 15';
+  if(S.scope!=='all'){box.innerHTML='<div class="empty">选择“全部仓库”查看排名</div>';return;}
+  const by={};rows.forEach(r=>{by[r.repo]=(by[r.repo]||0)+(+r[MK[S.metric]]||0);});
+  const arr=Object.keys(by).map(r=>({repo:r,value:by[r]})).sort((a,b)=>b.value-a.value).slice(0,15);
+  if(!arr.length){box.innerHTML='<div class="empty">暂无数据</div>';return;}
+  const max=arr[0].value||1,W=480,rowH=24;
+  const H=arr.length*rowH+8;
+  let bars='';arr.forEach((it,i)=>{const y=6+i*rowH;const bw=Math.max(3,(it.value/max)*(W-240));
+    bars+='<rect class="bar" x="192" y="'+y+'" width="'+bw+'" height="14"/>'+
+      '<text class="ranklabel" x="186" y="'+(y+11)+'" text-anchor="end">'+it.repo.replace('Nixz0824/','')+'</text>'+
+      '<text class="rankval" x="'+(196+bw)+'" y="'+(y+11)+'">'+it.value+'</text>';});
+  box.innerHTML='<svg viewBox="0 0 '+W+' '+H+'">'+bars+'</svg>';
 }
 
-function renderTable(rows){
-  const el0=el('table');if(!rows.length){el0.innerHTML='<div class="empty">暂无数据</div>';return;}
-  const m=S.metric;
-  const map={};rows.forEach(function(r){const k=r.repo+'|'+key(r.date,S.gran);if(!map[k])map[k]={repo:r.repo,period:key(r.date,S.gran),views:0,uniques:0,clones:0,cloners:0};const o=map[k];o.views+=+r.views||0;o.uniques+=+r.uniques||0;o.clones+=+r.clones||0;o.cloners+=+r.cloners||0;});
-  const arr=Object.values(map).sort(function(a,b){return a.repo<b.repo?-1:a.repo>b.repo?1:(a.period<b.period?-1:1);});
+function drawTable(rows){
+  const box=el('table');
+  if(!rows.length){box.innerHTML='<div class="empty">暂无数据</div>';return;}
+  const map={};rows.forEach(r=>{const k=r.repo+'|'+key(r.date,S.gran);if(!map[k])map[k]={repo:r.repo,period:key(r.date,S.gran),views:0,uniques:0,clones:0,cloners:0};const o=map[k];o.views+=+r.views||0;o.uniques+=+r.uniques||0;o.clones+=+r.clones||0;o.cloners+=+r.cloners||0;});
+  let arr=Object.values(map);
+  arr.sort((a,b)=>sortRows(a,b,window._sc||'repo',-1));
   let h='<table><thead><tr><th data-c="repo">仓库</th><th data-c="period">日期</th><th data-c="views">浏览</th><th data-c="uniques">访客</th><th data-c="clones">克隆</th><th data-c="cloners">克隆者</th></tr></thead><tbody>';
-  arr.forEach(function(o){h+='<tr><td>'+o.repo+'</td><td>'+o.period+'</td><td>'+o.views+'</td><td>'+o.uniques+'</td><td>'+o.clones+'</td><td>'+o.cloners+'</td></tr>';});
+  arr.forEach(o=>{h+='<tr><td>'+o.repo+'</td><td>'+o.period+'</td><td>'+o.views+'</td><td>'+o.uniques+'</td><td>'+o.clones+'</td><td>'+o.cloners+'</td></tr>';});
   h+='</tbody></table>';
-  el0.innerHTML=h;
-  if(window._tableSort){el0.querySelectorAll('th').forEach(function(th){th.addEventListener('click',function(){window._tableSort(th.dataset.c);});});}
+  box.innerHTML=h;
+}
+let _sc='repo',_sd=1;
+function sortRows(a,b,c,dir){if(c==='repo')return dir*(a.repo<b.repo?-1:a.repo>b.repo?1:0);if(c==='period')return dir*(a.period<b.period?-1:a.period>b.period?1:0);return dir*((+a[c]||0)-(+b[c]||0));}
+
+function buildSeg(id,vals,cur,fn){const seg=el(id);seg.innerHTML=vals.map(v=>'<button data-v="'+v+'" class="'+(v===cur?'on':'')+'">'+fmtMetric(v)+'</button>').join('');seg.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');fn(b.dataset.v);});}
+function render(){const rows=filterRows();renderCards(rows);drawTrend(rows);drawRank(rows);drawTable(rows);el('foot').innerHTML='<strong>更新说明:</strong> 时间范围相对数据最新一天('+maxDate()+')计算,不受打开日期影响。数据来自 GitHub Traffic API,每天定时抓取并取历史最大值;官方仅保留最近14天,归档从启用日起累加。';
 }
 
 function init(){
-  el('subtitle').textContent='数据更新至 GitHub Traffic;文件 all-traffic.csv 每仓库每天一行;看板由 GitHub Actions 每日自动生成。';
-  buildSeg('segMetric',['views','uniques','clones','cloners'],S.metric,function(v){S.metric=v;render();});
-  buildSeg('segGran',['day','week','month'],S.gran,function(v){S.gran=v;render();});
-  const scope=el('scope');
-  const repos=[...new Set(DATA.map(function(r){return r.repo;}))].sort();
-  scope.innerHTML='<option value="all">全部仓库</option>'+repos.map(function(r){return '<option value="'+r+'">'+r+'</option>';}).join('');
-  scope.value=S.scope;scope.addEventListener('change',function(){S.scope=scope.value;render();});
-  const range=el('range');
-  const opts=[[7,'近7天'],[14,'近14天'],[30,'近30天'],[90,'近90天'],[365,'近365天'],[0,'全部']];
-  range.innerHTML=opts.map(function(o){return '<option value="'+o[0]+'">'+o[1]+'</option>';}).join('');
-  range.value=S.range;range.addEventListener('change',function(){S.range=+range.value;render();});
-  el('table').dataset._sort=null;
-  el('table').addEventListener('click',function(e){const th=e.target.closest('th');if(!th)return;sortTable(th.dataset.c);});
+  buildSeg('segMetric',['views','uniques','clones','cloners'],S.metric,v=>{S.metric=v;render();});
+  buildSeg('segGran',['day','week','month'],S.gran,v=>{S.gran=v;render();});
+  const repos=[...new Set(DATA.map(r=>r.repo))].sort();
+  const sc=el('scope');sc.innerHTML='<option value="all">全部仓库</option>'+repos.map(r=>'<option value="'+r+'">'+r+'</option>').join('');
+  sc.value=S.scope;sc.addEventListener('change',()=>{S.scope=sc.value;render();});
+  const rg=el('range');const opts=[[7,'近7天'],[14,'近14天'],[30,'近30天'],[90,'近90天'],[365,'近365天'],[0,'全部']];
+  rg.innerHTML=opts.map(o=>'<option value="'+o[0]+'">'+o[1]+'</option>').join('');rg.value=S.range;rg.addEventListener('change',()=>{S.range=+rg.value;render();});
+  el('table').addEventListener('click',e=>{const th=e.target.closest('th');if(!th)return;const c=th.dataset.c;if(_sc===c){_sd*=-1;}else{_sc=c;_sd=1;}sortRowsInit();});
   render();
 }
-function buildSeg(id,vals,cur,onChange){
-  const seg=el(id);seg.innerHTML=vals.map(function(v){return '<button data-v="'+v+'" class="'+(v===cur?'on':'')+'">'+fmtMetric(v)+'</button>';}).join('');
-  seg.querySelectorAll('button').forEach(function(b){b.addEventListener('click',function(){seg.querySelectorAll('button').forEach(function(x){x.classList.remove('on');});b.classList.add('on');onChange(b.dataset.v);});});
-}
-let _sortC=null,_sortD=1;
-function sortTable(c){
-  if(_sortC===c){_sortD*=-1;}else{_sortC=c;_sortD=1;}
-  const tbody=el('table').querySelector('tbody');const trs=[...tbody.querySelectorAll('tr')];
-  trs.sort(function(a,b){const av=a.cells[cellIdx(c)].textContent,bv=b.cells[cellIdx(c)].textContent;const na=+av||0,nb=+bv||0;const cmp=(na||nb)&&(av===bv)?0:((na||nb)?(na-nb):(av<bv?-1:1));return cmp*_sortD;});
-  trs.forEach(function(t){tbody.appendChild(t);});
-}
-function cellIdx(c){return ['repo','period','views','uniques','clones','cloners'].indexOf(c);}
-function render(){const rows=filterRows();renderCards(rows);renderTrend(aggregateSeries(rows));renderRank(rows);renderTable(rows);}
-function el(id){return document.getElementById(id);}
+function sortRowsInit(){const t=el('table').querySelector('tbody');if(!t)return;const trs=[...t.querySelectorAll('tr')];const idx=['repo','period','views','uniques','clones','cloners'];trs.sort((a,b)=>{const c=_sc;const ai=idx.indexOf(c);const av=a.cells[ai].textContent,bv=b.cells[ai].textContent;const na=+av||0,nb=+bv||0;let cmp;if(c==='repo'||c==='period'){cmp=av<bv?-1:av>bv?1:0;}else{cmp=na-nb;}return cmp*_sd;});trs.forEach(x=>t.appendChild(x));}
 window.addEventListener('DOMContentLoaded',init);
 </script>
 </body>
