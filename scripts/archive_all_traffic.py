@@ -48,7 +48,10 @@ def get_token():
 
 def api_get(path, token, want="json"):
     """GET an endpoint. Returns parsed JSON by default, or the raw response."""
-    req = urllib.request.Request(API + path)
+    # `path` may be a bare path (e.g. "/user/repos") OR a full URL (from a
+    # pagination Link header). Only prepend the API base for bare paths.
+    url = path if path.startswith("http") else API + path
+    req = urllib.request.Request(url)
     req.add_header("User-Agent", USER_AGENT)
     req.add_header("Accept", "application/vnd.github+json")
     if token:
