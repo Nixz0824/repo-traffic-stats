@@ -1,0 +1,276 @@
+#!/usr/bin/env python3
+"""
+Render the traffic archive (all-traffic.csv) into a self-contained,
+fully interactive dashboard (dashboard.html).
+
+The output HTML embeds the data as JSON and ships its own CSS + vanilla-JS
+SVG charts (no CDN, no external fetches), so it works offline and inside a
+private repo.
+
+Features in the dashboard:
+  - Metric (类别): views / uniques / clones / cloners
+  - Granularity (粒度): day / week / month
+  - Scope (仓库): all repos, or a single repo
+  - Time range (时间范围): 7 / 14 / 30 / 90 / 365 / all days
+  - Summary cards, trend chart, repo ranking, sortable table
+
+Usage:
+    python3 render_dashboard.py                      # reads ./all-traffic.csv -> ./dashboard.html
+    python3 render_dashboard.py --input X.csv --output y.html
+"""
+
+import csv
+import json
+import os
+import sys
+import argparse
+
+
+def load_rows(path):
+    if not os.path.exists(path):
+        return []
+    rows = []
+    with open(path, newline="", encoding="utf-8") as f:
+        for r in csv.DictReader(f):
+            def _int(v):
+                try:
+                    return int(v)
+                except (TypeError, ValueError):
+                    return 0
+            rows.append({
+                "repo": r.get("repo", ""),
+                "date": r.get("date", ""),
+                "views": _int(r.get("views")),
+                "uniques": _int(r.get("uniques")),
+                "clones": _int(r.get("clones")),
+                "cloners": _int(r.get("cloners")),
+            })
+    return rows
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--input", default="all-traffic.csv")
+    ap.add_argument("--output", default="dashboard.html")
+    args = ap.parse_args()
+
+    rows = load_rows(args.input)
+    data_json = json.dumps(rows, ensure_ascii=False)
+    html = TEMPLATE.replace("__DATA__", data_json)
+    with open(args.output, "w", encoding="utf-8") as f:
+        f.write(html)
+    print(f"wrote {args.output}: {len(rows)} rows, {len({r['repo'] for r in rows})} repos")
+
+
+TEMPLATE = r"""<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>仓库流量看板</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--panel2:#1f2733;--bd:#30363d;--tx:#e6edf3;--mut:#8b949e;--acc:#58a6ff;--ok:#3fb950;--warn:#d29922;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 -apple-system,'Segoe UI','Microsoft YaHei',sans-serif;padding:20px}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:var(--mut);font-size:12px;margin-bottom:18px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px}
+  .card{background:var(--panel);border:1px solid var(--bd);border-radius:10px;padding:14px}
+  .card .k{color:var(--mut);font-size:12px}
+  .card .v{font-size:24px;font-weight:700;margin-top:4px}
+  .card .s{color:var(--mut);font-size:12px;margin-top:2px}
+  .panel{background:var(--panel);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:18px}
+  .panel h2{font-size:15px;margin:0 0 12px;color:var(--tx)}
+  .ctrl{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end;margin-bottom:8px}
+  .grp{display:flex;flex-direction:column;gap:6px}
+  .grp label{font-size:12px;color:var(--mut)}
+  .seg{display:inline-flex;background:var(--panel2);border:1px solid var(--bd);border-radius:8px;overflow:hidden}
+  .seg button{background:transparent;border:0;color:var(--mut);padding:6px 12px;font-size:13px;cursor:pointer}
+  .seg button.on{background:var(--acc);color:#0d1117;font-weight:600}
+  select, .select{background:var(--panel2);border:1px solid var(--bd);color:var(--tx);padding:7px 10px;border-radius:8px;font-size:13px}
+  svg{display:block;width:100%;overflow:visible}
+  .legend{color:var(--mut);font-size:12px;margin-top:6px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:7px 10px;border-bottom:1px solid var(--bd);text-align:right;white-space:nowrap}
+  th{color:var(--mut);font-weight:600;cursor:pointer;user-select:none}
+  th:first-child,td:first-child{text-align:left}
+  th:hover{color:var(--tx)}
+  .empty{color:var(--mut);padding:24px;text-align:center}
+  .axis{stroke:var(--bd);stroke-width:1}
+  .grid{stroke:#21262d;stroke-width:1}
+  .val{fill:var(--mut);font-size:11px}
+  .lbl{fill:var(--mut);font-size:11px;text-anchor:end}
+  .note{color:var(--mut);font-size:12px;margin-top:12px}
+  .dot{fill:var(--acc)}
+  .bar{fill:var(--acc);rx:3}
+  .ranktext{fill:var(--tx);font-size:12px}
+</style>
+</head>
+<body>
+<h1>仓库流量看板</h1>
+<div class="sub" id="subtitle"></div>
+
+<div class="cards" id="cards"></div>
+
+<div class="panel">
+  <h2>筛选</h2>
+  <div class="ctrl">
+    <div class="grp"><label>类别(指标)</label>
+      <div class="seg" id="segMetric"></div></div>
+    <div class="grp"><label>粒度</label>
+      <div class="seg" id="segGran"></div></div>
+    <div class="grp"><label>仓库范围</label>
+      <select id="scope"></select></div>
+    <div class="grp"><label>时间范围</label>
+      <select id="range"></select></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>趋势图</h2>
+  <div id="trend"></div>
+  <div class="legend" id="trendLegend"></div>
+</div>
+
+<div class="panel" id="rankWrap">
+  <h2>仓库排名</h2>
+  <div id="rank"></div>
+</div>
+
+<div class="panel">
+  <h2>明细表</h2>
+  <div id="table"></div>
+  <div class="note">提示:点表头排序。数据来自 GitHub Traffic API,每天定时抓取并取历史最大值。</div>
+</div>
+
+<script>
+const DATA = __DATA__;
+const METRICS = {views:'浏览', uniques:'访客', clones:'克隆', cloners:'克隆者'};
+const MKEY = {views:'views', uniques:'uniques', clones:'clones', cloners:'cloners'};
+let S = {metric:'views', gran:'day', scope:'all', range:7};
+
+function pad(n){return (n<10?'0':'')+n;}
+function iso(y,m,d){return y+'-'+pad(m)+'-'+pad(d);}
+function todayISO(){const t=new Date();return iso(t.getFullYear(),t.getMonth()+1,t.getDate());}
+function mondayISO(dstr){const p=dstr.split('-');const d=new Date(+p[0],+p[1]-1,+p[2]);const wd=(d.getDay()+6)%7;d.setDate(d.getDate()-wd);return iso(d.getFullYear(),d.getMonth()+1,d.getDate());}
+function key(date,gran){if(gran==='day')return date;if(gran==='week')return mondayISO(date);return date.slice(0,7);}
+function cutoff(){if(S.range===0)return '0000-00-00';const t=new Date();t.setDate(t.getDate()-(S.range-1));return iso(t.getFullYear(),t.getMonth()+1,t.getDate());}
+
+function fmtMetric(k){return METRICS[k]||k;}
+function fillChart(el,inner){el.innerHTML=inner;}
+
+function sum(arr,m){return arr.reduce((a,r)=>a+(+r[MKEY[m]]||0),0);}
+
+function filterRows(){
+  const cut=cutoff();
+  return DATA.filter(function(r){ if(S.scope!=='all'&&r.repo!==S.scope)return false; return r.date>=cut; });
+}
+
+function aggregateSeries(rows){
+  const m=S.metric,c={};
+  rows.forEach(function(r){const k=key(r.date,S.gran); c[k]=(c[k]||0)+(+r[MKEY[m]]||0);});
+  return Object.keys(c).sort().map(function(k){return {label:k,value:c[k]};});
+}
+
+function renderCards(rows){
+  const repos=new Set(rows.map(function(r){return r.repo;}));
+  const dates=rows.map(function(r){return r.date;}).sort();
+  const sumV=sum(rows,'views'),sumC=sum(rows,'uniques'),sumCl=sum(rows,'clones');
+  const byRepo={};rows.forEach(function(r){byRepo[r.repo]=(byRepo[r.repo]||0)+(+r[MKEY[S.metric]]||0);});
+  let top='-';let topv=0;Object.keys(byRepo).forEach(function(r){if(byRepo[r]>topv){topv=byRepo[r];top=r;}});
+  const rangeLabel=S.range===0?'全部':('近'+S.range+'天');
+  el('cards').innerHTML=
+    card('仓库数',repos.size)+
+    card('日期跨度',dates.length?(dates[0]+' ~ '+dates[dates.length-1]):'-')+
+    card('浏览(合计)',sumV)+
+    card('访客(合计)',sumC)+
+    card('克隆(合计)',sumCl)+
+    card('Top 仓库',top, rangeLabel+' · '+fmtMetric(S.metric));
+}
+function card(k,v,s){return '<div class="card"><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="s">'+(s||'')+'</div></div>';}
+
+function renderTrend(series){
+  const el0=el('trend');if(!series.length){el0.innerHTML='<div class="empty">该范围暂无数据</div>';return;}
+  const W=920,H=300,P=40;
+  const max=Math.max.apply(null,series.map(function(s){return s.value;}))||1;
+  const n=series.length;
+  const x=i=>P+i*(W-2*P)/Math.max(n-1,1);
+  const y=v=>H-P-(v/max)*(H-2*P);
+  let grid='';for(let g=0;g<=4;g++){const gy=y(max*g/4);grid+='<line class="grid" x1='+P+' y1='+gy+' x2='+(W-P)+' y2='+gy+'/>';const gv=Math.round(max*g/4);grid+='<text class="val" x='+(P-6)+' y='+(gy+4)+' text-anchor="end">'+gv+'</text>';}
+  let path='',area='',dots='';
+  series.forEach(function(s,i){const px=x(i),py=y(s.value);path+=(i?'L':'M')+px+' '+py+' ';area+=(i?'L':'M')+px+' '+py+' ';dots+='<circle class="dot" cx="'+px+'" cy="'+py+'" r="3"><title>'+s.label+' · '+fmtMetric(S.metric)+' '+s.value+'</title></circle>';});
+  area+='L'+x(n-1)+' '+(H-P)+' L'+P+' '+(H-P)+' Z';
+  let xlab='';const step=Math.max(1,Math.floor(n/6));series.forEach(function(s,i){if(i%step===0){xlab+='<text class="lbl" x='+x(i)+' y='+(H-P+16)+' text-anchor="middle">'+s.label+'</text>';}});
+  let line='';series.forEach(function(s,i){if(i%step===0){line+='<line class="axis" x1='+x(i)+' y1='+P+' x2='+x(i)+' y2='+(H-P)+'/>';}});
+  fillChart(el0,'<svg viewBox="0 0 '+W+' '+H+'">'+grid+line+'<path d="'+area+'" fill="'+halfHex('#58a6ff')+'" />'+
+    '<path d="'+path+'" fill="none" stroke="#58a6ff" stroke-width="2"/>'+dots+
+    '<line class="axis" x1='+P+' y1='+(H-P)+' x2='+(W-P)+' y2='+(H-P)+'/>'+xlab+'</svg>');
+  el('trendLegend').textContent='趋势 = '+fmtMetric(S.metric)+' · 粒度 '+(S.gran==='day'?'日':S.gran==='week'?'周':'月')+' · '+(S.scope==='all'?'全部仓库合计':S.scope);
+}
+function halfHex(){return 'rgba(88,166,255,0.12)';}
+
+function renderRank(rows){
+  const wrap=el('rankWrap');
+  if(S.scope!=='all'){wrap.style.display='none';return;}
+  wrap.style.display='';
+  const byRepo={};rows.forEach(function(r){byRepo[r.repo]=(byRepo[r.repo]||0)+(+r[MKEY[S.metric]]||0);});
+  const arr=Object.keys(byRepo).map(function(r){return {repo:r,value:byRepo[r]};}).sort(function(a,b){return b.value-a.value;}).slice(0,15);
+  const el0=el('rank');if(!arr.length){el0.innerHTML='<div class="empty">暂无数据</div>';return;}
+  const max=arr[0].value||1,W=920,rowH=22,H=arr.length*rowH+10;
+  let bars='';arr.forEach(function(it,i){const y=6+i*rowH;const bw=Math.max(2,(it.value/max)*(W-260));bars+='<rect class="bar" x="230" y="'+y+'" width="'+bw+'" height="16"/>'+
+    '<text class="ranktext" x="222" y="'+(y+13)+'" text-anchor="end">'+it.repo+'</text>'+
+    '<text class="ranktext" x="'+(236+bw)+'" y="'+(y+13)+'">'+it.value+'</text>';});
+  fillChart(el0,'<svg viewBox="0 0 '+W+' '+H+'">'+bars+'</svg>');
+}
+
+function renderTable(rows){
+  const el0=el('table');if(!rows.length){el0.innerHTML='<div class="empty">暂无数据</div>';return;}
+  const m=S.metric;
+  const map={};rows.forEach(function(r){const k=r.repo+'|'+key(r.date,S.gran);if(!map[k])map[k]={repo:r.repo,period:key(r.date,S.gran),views:0,uniques:0,clones:0,cloners:0};const o=map[k];o.views+=+r.views||0;o.uniques+=+r.uniques||0;o.clones+=+r.clones||0;o.cloners+=+r.cloners||0;});
+  const arr=Object.values(map).sort(function(a,b){return a.repo<b.repo?-1:a.repo>b.repo?1:(a.period<b.period?-1:1);});
+  let h='<table><thead><tr><th data-c="repo">仓库</th><th data-c="period">日期</th><th data-c="views">浏览</th><th data-c="uniques">访客</th><th data-c="clones">克隆</th><th data-c="cloners">克隆者</th></tr></thead><tbody>';
+  arr.forEach(function(o){h+='<tr><td>'+o.repo+'</td><td>'+o.period+'</td><td>'+o.views+'</td><td>'+o.uniques+'</td><td>'+o.clones+'</td><td>'+o.cloners+'</td></tr>';});
+  h+='</tbody></table>';
+  el0.innerHTML=h;
+  if(window._tableSort){el0.querySelectorAll('th').forEach(function(th){th.addEventListener('click',function(){window._tableSort(th.dataset.c);});});}
+}
+
+function init(){
+  el('subtitle').textContent='数据更新至 GitHub Traffic;文件 all-traffic.csv 每仓库每天一行;看板由 GitHub Actions 每日自动生成。';
+  buildSeg('segMetric',['views','uniques','clones','cloners'],S.metric,function(v){S.metric=v;render();});
+  buildSeg('segGran',['day','week','month'],S.gran,function(v){S.gran=v;render();});
+  const scope=el('scope');
+  const repos=[...new Set(DATA.map(function(r){return r.repo;}))].sort();
+  scope.innerHTML='<option value="all">全部仓库</option>'+repos.map(function(r){return '<option value="'+r+'">'+r+'</option>';}).join('');
+  scope.value=S.scope;scope.addEventListener('change',function(){S.scope=scope.value;render();});
+  const range=el('range');
+  const opts=[[7,'近7天'],[14,'近14天'],[30,'近30天'],[90,'近90天'],[365,'近365天'],[0,'全部']];
+  range.innerHTML=opts.map(function(o){return '<option value="'+o[0]+'">'+o[1]+'</option>';}).join('');
+  range.value=S.range;range.addEventListener('change',function(){S.range=+range.value;render();});
+  el('table').dataset._sort=null;
+  el('table').addEventListener('click',function(e){const th=e.target.closest('th');if(!th)return;sortTable(th.dataset.c);});
+  render();
+}
+function buildSeg(id,vals,cur,onChange){
+  const seg=el(id);seg.innerHTML=vals.map(function(v){return '<button data-v="'+v+'" class="'+(v===cur?'on':'')+'">'+fmtMetric(v)+'</button>';}).join('');
+  seg.querySelectorAll('button').forEach(function(b){b.addEventListener('click',function(){seg.querySelectorAll('button').forEach(function(x){x.classList.remove('on');});b.classList.add('on');onChange(b.dataset.v);});});
+}
+let _sortC=null,_sortD=1;
+function sortTable(c){
+  if(_sortC===c){_sortD*=-1;}else{_sortC=c;_sortD=1;}
+  const tbody=el('table').querySelector('tbody');const trs=[...tbody.querySelectorAll('tr')];
+  trs.sort(function(a,b){const av=a.cells[cellIdx(c)].textContent,bv=b.cells[cellIdx(c)].textContent;const na=+av||0,nb=+bv||0;const cmp=(na||nb)&&(av===bv)?0:((na||nb)?(na-nb):(av<bv?-1:1));return cmp*_sortD;});
+  trs.forEach(function(t){tbody.appendChild(t);});
+}
+function cellIdx(c){return ['repo','period','views','uniques','clones','cloners'].indexOf(c);}
+function render(){const rows=filterRows();renderCards(rows);renderTrend(aggregateSeries(rows));renderRank(rows);renderTable(rows);}
+function el(id){return document.getElementById(id);}
+window.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>
+"""
+
+
+if __name__ == "__main__":
+    main()
