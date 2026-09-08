@@ -51,15 +51,22 @@ def load_rows(path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", default="all-traffic.csv")
-    ap.add_argument("--output", default="dashboard.html")
+    ap.add_argument("--output", default="index.html")
     args = ap.parse_args()
 
     rows = load_rows(args.input)
     data_json = json.dumps(rows, ensure_ascii=False)
-    html = TEMPLATE.replace("__DATA__", data_json)
-    with open(args.output, "w", encoding="utf-8") as f:
-        f.write(html)
-    print(f"wrote {args.output}: {len(rows)} rows, {len({r['repo'] for r in rows})} repos")
+    slug = (os.environ.get("GITHUB_REPOSITORY")
+            or os.environ.get("REPO_SLUG")
+            or "Nixz0824/repo-traffic-stats")
+    html = (TEMPLATE.replace("__DATA__", data_json)
+                    .replace("__REPO_SLUG__", slug))
+    # Write index.html (GitHub Pages root + in-page refresh) AND dashboard.html (download).
+    for out in {args.output, "dashboard.html"}:
+        with open(out, "w", encoding="utf-8") as f:
+            f.write(html)
+    print(f"wrote {args.output} + dashboard.html: {len(rows)} rows, "
+          f"{len({r['repo'] for r in rows})} repos")
 
 
 TEMPLATE = r"""<!DOCTYPE html>
@@ -83,6 +90,11 @@ TEMPLATE = r"""<!DOCTYPE html>
   .h1sub{color:var(--mut);font-size:12.5px;margin-top:4px}
   .meta{text-align:right;color:var(--mut);font-size:12px}
   .meta b{color:var(--txt);font-weight:600}
+  #refreshBtn{margin-top:6px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    font-size:12px;padding:6px 12px;border-radius:8px;cursor:pointer;transition:.12s}
+  #refreshBtn:hover{background:var(--acc);color:#0a0e16}
+  #refreshBtn:disabled{opacity:.5;cursor:default}
+  #refreshStatus{color:var(--mut);font-size:11.5px}
 
   .filters{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;
     background:linear-gradient(var(--bg) 78%,transparent);padding:10px 0 14px;margin-bottom:14px;backdrop-filter:blur(2px)}
@@ -135,7 +147,9 @@ TEMPLATE = r"""<!DOCTYPE html>
       <h1>仓库流量看板</h1>
       <div class="h1sub">Views · Unique · Clones · Cloners</div>
     </div>
-    <div class="meta">数据源 <b>all-traffic.csv</b> · 每仓库每天一行<br>看板每日由 GitHub Actions 自动生成</div>
+    <div class="meta">数据源 <b>all-traffic.csv</b> · 每仓库每天一行<br>
+      <button id="refreshBtn" onclick="refreshData()">⟳ 更新数据</button><span id="refreshStatus"></span>
+    </div>
   </div>
 
   <div class="filters">
@@ -167,7 +181,8 @@ TEMPLATE = r"""<!DOCTYPE html>
 </div>
 
 <script>
-const DATA = __DATA__;
+// Data is mutable so the in-page "refresh" button can replace it live.
+let DATA = __DATA__;
 const METRICS = {views:'浏览', uniques:'访客', clones:'克隆', cloners:'克隆者'};
 const MK = {views:'views', uniques:'uniques', clones:'clones', cloners:'cloners'};
 let S = {metric:'views', gran:'day', scope:'all', range:14};
@@ -258,7 +273,7 @@ let _sc='repo',_sd=1;
 function sortRows(a,b,c,dir){if(c==='repo')return dir*(a.repo<b.repo?-1:a.repo>b.repo?1:0);if(c==='period')return dir*(a.period<b.period?-1:a.period>b.period?1:0);return dir*((+a[c]||0)-(+b[c]||0));}
 
 function buildSeg(id,vals,cur,fn){const seg=el(id);seg.innerHTML=vals.map(v=>'<button data-v="'+v+'" class="'+(v===cur?'on':'')+'">'+fmtMetric(v)+'</button>').join('');seg.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');fn(b.dataset.v);});}
-function render(){const rows=filterRows();renderCards(rows);drawTrend(rows);drawRank(rows);drawTable(rows);el('foot').innerHTML='<strong>更新说明:</strong> 时间范围相对数据最新一天('+maxDate()+')计算,不受打开日期影响。数据来自 GitHub Traffic API,每天定时抓取并取历史最大值;官方仅保留最近14天,归档从启用日起累加。';
+function render(){const rows=filterRows();renderCards(rows);drawTrend(rows);drawRank(rows);drawTable(rows);el('foot').innerHTML='<strong>更新说明:</strong> 时间范围相对数据最新一天('+maxDate()+')计算,不受打开日期影响。数据来自 GitHub Traffic API,每天定时抓取并取历史最大值;官方仅保留最近14天,归档从启用日起累加。右上角「更新数据」会从公开仓库拉取最新 all-traffic.csv 并重建看板。';
 }
 
 function init(){
@@ -273,6 +288,28 @@ function init(){
   render();
 }
 function sortRowsInit(){const t=el('table').querySelector('tbody');if(!t)return;const trs=[...t.querySelectorAll('tr')];const idx=['repo','period','views','uniques','clones','cloners'];trs.sort((a,b)=>{const c=_sc;const ai=idx.indexOf(c);const av=a.cells[ai].textContent,bv=b.cells[ai].textContent;const na=+av||0,nb=+bv||0;let cmp;if(c==='repo'||c==='period'){cmp=av<bv?-1:av>bv?1:0;}else{cmp=na-nb;}return cmp*_sd;});trs.forEach(x=>t.appendChild(x));}
+async function refreshData(){
+  const btn=el('refreshBtn'), st=el('refreshStatus');
+  btn.disabled=true; btn.textContent='更新中…'; st.textContent='';
+  try{
+    const r=await fetch('https://api.github.com/repos/__REPO_SLUG__/contents/all-traffic.csv',{cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    DATA=parseCsv(atob(j.content.replace(/\s/g,'')));
+    render();
+    st.textContent=' · 已更新至 '+maxDate();
+    btn.textContent='⟳ 更新数据';
+  }catch(e){
+    st.textContent=' · 更新失败('+e.message+')';
+    btn.textContent='⟳ 更新数据';
+  }finally{ btn.disabled=false; }
+}
+function parseCsv(txt){
+  const lines=txt.trim().split(/\r?\n/); const rows=[];
+  for(let i=1;i<lines.length;i++){ if(!lines[i].trim())continue; const c=lines[i].split(','); if(c.length<6)continue;
+    rows.push({repo:c[0],date:c[1],views:+c[2]||0,uniques:+c[3]||0,clones:+c[4]||0,cloners:+c[5]||0}); }
+  return rows;
+}
 window.addEventListener('DOMContentLoaded',init);
 </script>
 </body>
